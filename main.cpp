@@ -36,6 +36,50 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
+// Vertex: takes aUV in [0,1], remaps to NDC [-1,1]
+const char* uvVertSrc = R"(
+    #version 330 core
+    layout(location = 0) in vec2 aUV;
+    void main() {
+        // map [0,1] to [-1,1]
+        vec2 pos = aUV * 2.0 - 1.0;
+        gl_Position = vec4(pos, 0.0, 1.0);
+    }
+)";
+    
+// Fragment: just draw white lines or flat color
+const char* uvFragSrc = R"(
+    #version 330 core
+    out vec4 FragColor;
+    void main() {
+        FragColor = vec4(1.0); 
+    }
+)";
+
+GLuint compileShader(GLenum type, const char* src) {
+    GLuint s = glCreateShader(type);
+    glShaderSource(s, 1, &src, nullptr);
+    glCompileShader(s);
+    GLint ok; glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
+    if (!ok) {
+        char buf[512]; glGetShaderInfoLog(s, 512, nullptr, buf);
+        std::cerr << "Shader compile error: " << buf << "\n";
+    }
+    return s;
+}
+
+GLuint linkProgram(GLuint v, GLuint f) {
+    GLuint p = glCreateProgram();
+    glAttachShader(p, v);
+    glAttachShader(p, f);
+    glLinkProgram(p);
+    GLint ok; glGetProgramiv(p, GL_LINK_STATUS, &ok);
+    if (!ok) {
+        char buf[512]; glGetProgramInfoLog(p, 512, nullptr, buf);
+        std::cerr << "Program link error: " << buf << "\n";
+    }
+    return p;
+}
 
 // Flattens 3D triangle (by indices into the Vertex array) to 2D using orthonormal basis
 void flattenTriangle(const Vertex& p0, const Vertex& p1, const Vertex& p2, Vec2& z1, Vec2& z2) {
@@ -77,6 +121,29 @@ void normalizeUVs(std::vector<Vec2>& uvs) {
     for (auto& uv : uvs) {
         uv.x = (uv.x - minUV.x) / scale.x;
         uv.y = (uv.y - minUV.y) / scale.y;
+    }
+}
+
+void normalizeUVsUniform(std::vector<Vec2>& uvs) {
+    if (uvs.empty()) return;
+
+    Vec2 minUV = uvs[0], maxUV = uvs[0];
+    for (auto& uv : uvs) {
+        minUV.x = std::min(minUV.x, uv.x);
+        minUV.y = std::min(minUV.y, uv.y);
+        maxUV.x = std::max(maxUV.x, uv.x);
+        maxUV.y = std::max(maxUV.y, uv.y);
+    }
+
+    float width  = maxUV.x - minUV.x;
+    float height = maxUV.y - minUV.y;
+    float scale  = std::max(width, height);
+    if (scale < 1e-8f) scale = 1.0f;
+
+    // Center and uniformly scale into [0,1]
+    for (auto& uv : uvs) {
+        uv.x = (uv.x - minUV.x) / scale;
+        uv.y = (uv.y - minUV.y) / scale;
     }
 }
 
@@ -234,7 +301,7 @@ int main(int argc, char** argv) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(800, 600, "OBJ Viewer", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(800, 800, "OBJ Viewer", NULL, NULL);
     if (!window) {
         glfwTerminate();
         return -1;
@@ -277,59 +344,67 @@ int main(int argc, char** argv) {
     printf("anchor1:%d and anchor2:%d\n", anchor1, anchor2);
     solveLSCM(vertices, triangles, anchor1, uv1, anchor2, uv2, uvs);
 
-    normalizeUVs(uvs);
+    normalizeUVsUniform(uvs);
     for(auto uv : uvs){
         printf("u:%f v:%f\n", uv.x, uv.y);
     }
 
-    
-
-
-
-    // Create buffers
-    GLuint VAO, VBO, EBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
-
-    // Bind VAO
-    glBindVertexArray(VAO);
-
-    // Vertex buffer
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
-
-    // Index buffer
-    std::vector<unsigned int> indices;
+    //pack vertices
+    std::vector<float> uvData;
+    uvData.reserve(triangles.size() * 3 * 2);
     for (auto& tri : triangles) {
-        indices.push_back(tri.v1);
-        indices.push_back(tri.v2);
-        indices.push_back(tri.v3);
+        // push each corner’s UV
+        uvData.push_back( uvs[tri.v1].x );
+        uvData.push_back( uvs[tri.v1].y );
+        uvData.push_back( uvs[tri.v2].x );
+        uvData.push_back( uvs[tri.v2].y );
+        uvData.push_back( uvs[tri.v3].x );
+        uvData.push_back( uvs[tri.v3].y );
     }
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
+    GLuint uvVert = compileShader(GL_VERTEX_SHADER,   uvVertSrc);
+    GLuint uvFrag = compileShader(GL_FRAGMENT_SHADER, uvFragSrc);
+    GLuint uvProgram = linkProgram(uvVert, uvFrag);
 
-    // Vertex attributes
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-    glEnableVertexAttribArray(0);
+    //Build UV VAO
+    GLuint uvVAO, uvVBO;
+    glGenVertexArrays(1, &uvVAO);
+    glGenBuffers(1, &uvVBO);
 
+    glBindVertexArray(uvVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, uvVBO);
+        glBufferData(GL_ARRAY_BUFFER,
+                uvData.size() * sizeof(float),
+                uvData.data(),
+                GL_STATIC_DRAW);
+
+        // attribute 0 = vec2 aUV
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+    glBindVertexArray(0);
+
+    GLsizei uvVertexCount = static_cast<GLsizei>(uvData.size() / 2);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     // Simple render loop
     while (!glfwWindowShouldClose(window)) {
         glClearColor(0.1f, 0.1f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-
-        glBindVertexArray(VAO);
-        glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
-
+    
+        // Draw UV map
+        glUseProgram(uvProgram);
+        glBindVertexArray(uvVAO);
+        glDrawArrays(GL_TRIANGLES, 0, uvVertexCount);
+    
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
     // Cleanup
-    glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &EBO);
-    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &uvVBO);
+    glDeleteVertexArrays(1, &uvVAO);
+
+    glDeleteProgram(uvProgram);
+
     glfwTerminate();
     return 0;
 }
