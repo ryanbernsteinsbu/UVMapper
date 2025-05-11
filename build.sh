@@ -1,1 +1,1 @@
-g++ main.cpp glad/glad.c -Iinclude -lglfw -ldl -lGL -o obj_viewer
+g++ main.cpp glad/glad.c -Iinclude -lglfw -ldl -lGL -g -o UVMapper
