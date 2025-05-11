@@ -21,6 +21,7 @@
 #include <iomanip>
 
 #define maxDihedralAngle 116.566 //anything as sharp or less sharp than a dodecahedron is cut
+#define anchors 2
 
 struct Vertex { 
     float x, y, z;
@@ -452,7 +453,7 @@ void solveLSCM(const std::vector<Vertex>& vertices, const std::vector<Triangle>&
     }
 
     // Apply anchor constraints
-    for (int k = 0; k < 3; k++) {
+    for (int k = 0; k < anchors; k++) {
         int idx = (k == 0 ? anchor1 : (k == 1 ? anchor2 : anchor3));
         Vec2 fixedUV = (k == 0 ? uv1 : (k == 1 ? uv2 : uv3));
 
