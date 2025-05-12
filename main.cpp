@@ -184,7 +184,7 @@ std::vector<DualEdge> primMST(int numFaces, const std::vector<DualEdge>& dualEdg
     std::vector<DualEdge> mst;
     mst.reserve(numFaces - 1);
 
-    using PQItem = std::tuple<float,int,int>;
+    using PQItem = std::tuple<float,int,int>; //I found this implementation, did not come up with it
     struct cmp {
         bool operator()(PQItem const& a, PQItem const& b) const {
             return std::get<0>(a) > std::get<0>(b);
@@ -197,7 +197,8 @@ std::vector<DualEdge> primMST(int numFaces, const std::vector<DualEdge>& dualEdg
         pq.emplace(adj.second, 0, adj.first);
 
     while (!pq.empty() && mst.size() < (size_t)numFaces - 1) {
-        auto [w, u, v] = pq.top(); pq.pop();
+        auto [w, u, v] = pq.top();
+        pq.pop();
         if (inMST[v]) continue;// already in tree
 
         inMST[v] = true;
@@ -251,7 +252,7 @@ std::vector<std::vector<int>> extractIslands(int numFaces, const std::vector<Dua
         islands.push_back(std::move(queue));
     }
 
-    if (islands.size() == 1) {
+    if (islands.size() == 1) { //we need to split at least once
         std::vector<std::vector<int>> mstAdj(numFaces);
         for (auto const& e : mstEdges) {
             mstAdj[e.f0].push_back(e.f1);
@@ -265,12 +266,12 @@ std::vector<std::vector<int>> extractIslands(int numFaces, const std::vector<Dua
             vis[start] = true;
             int cnt = 0;
             while (!q.empty()) {
-                int u = q.front(); q.pop();
+                int u = q.front();
+                q.pop();
                 cnt++;
                 for (int w : mstAdj[u]) {
                     // skip the removed edge
-                    if ((u == blockU && w == blockV) ||
-                        (u == blockV && w == blockU)) continue;
+                    if ((u == blockU && w == blockV) || (u == blockV && w == blockU)) continue;
                     if (!vis[w]) {
                         vis[w] = true;
                         q.push(w);
@@ -302,7 +303,8 @@ std::vector<std::vector<int>> extractIslands(int numFaces, const std::vector<Dua
             q.push(seed);
             visited[seed] = true;
             while (!q.empty()) {
-                int u = q.front(); q.pop();
+                int u = q.front();
+                q.pop();
                 comp.push_back(u);
                 for (int w : mstAdj[u]) {
                     if ((u == bestU && w == bestV) || (u == bestV && w == bestU)) continue;
@@ -320,9 +322,7 @@ std::vector<std::vector<int>> extractIslands(int numFaces, const std::vector<Dua
     return islands;
 }
 
-//post-processing
 
-// flattens 3D triangle to 2D using orthonormal basis
 void flattenTriangle(const Vertex& p0, const Vertex& p1, const Vertex& p2, Vec2& z1, Vec2& z2) {
     glm::vec3 u = glm::vec3(p1.x, p1.y, p1.z) - glm::vec3(p0.x, p0.y, p0.z);
     glm::vec3 v = glm::vec3(p2.x, p2.y, p2.z) - glm::vec3(p0.x, p0.y, p0.z);
@@ -424,30 +424,43 @@ void solveLSCM(const std::vector<Vertex>& vertices, const std::vector<Triangle>&
         int k = tri.v3;
 
         Vec2 z1, z2; //triangle sides in 2d complex space
-        flattenTriangle(vertices[i], vertices[j], vertices[k], z1, z2); //get the uv coords of the rest of the triangle
+        flattenTriangle(vertices[i], vertices[j], vertices[k], z1, z2); 
 
-        double z_a = z1.x, z_b = z1.y;
-        double z_c = z2.x, z_d = z2.y;
+        double a1 = z1.x, b1 = z1.y;
+        double a2 = z2.x, b2 = z2.y;
 
-        double area = std::abs((z_a * z_d - z_b * z_c) / 2.0);
+        double area = std::abs((a1 * b2 - b1 * a2) / 2.0);
         if (area < 1e-8) continue; //degenerate triangles
 
-        //matrix representing the triangle
-        double S[3][2] = {
-            {-(z_a - z_c), -(z_b - z_d)}, //s0
-            {z_a, z_b}, //s1
-            {z_c, z_d} //s2
+        // Local contributions to the 2x2 block per vertex pair
+        int ids[3] = { i, j, k };
+        double coeffs[3][2] = {
+            { -(a1 + a2),  (b1 + b2) },
+            {a1, -b1},
+            {a2, -b2}
         };
 
-        int ids[3] = {i, j, k};
-        //apply triangle to A
         for (int r = 0; r < 3; r++) {
+            int vr = ids[r];
             for (int s = 0; s < 3; s++) {
-                for (int t = 0; t < 2; t++) {
-                    for (int u = 0; u < 2; u++) {
-                        A[2 * ids[r] + t][2 * ids[s] + u] += S[r][t] * S[s][u];
-                    }
-                }
+                int vs = ids[s];
+                A[2 * vr + 0][2 * vs + 0] += coeffs[r][0] * coeffs[s][0]; // uu
+                A[2 * vr + 0][2 * vs + 1] += coeffs[r][0] * coeffs[s][1]; // uv
+            }
+        }
+
+        double icoeffs[3][2] = {
+            {-(b1 + b2), -(a1 + a2)}, // i
+            {b1,a1}, // j
+            {b2,a2}  // k
+        };
+
+        for (int r = 0; r < 3; ++r) {
+            int vr = ids[r];
+            for (int s = 0; s < 3; ++s) {
+                int vs = ids[s];
+                A[2 * vr + 1][2 * vs + 0] += icoeffs[r][0] * icoeffs[s][0]; // vu
+                A[2 * vr + 1][2 * vs + 1] += icoeffs[r][0] * icoeffs[s][1]; // vv
             }
         }
     }
@@ -520,7 +533,7 @@ std::vector<float> IslandSolve(const std::vector<Vertex>& vertices, const std::v
         // } else {
         //     break;
         // }
-        if (island.size() <= 2) { //edge cases are underconstrained
+        if (island.size() <= 2) { //edge cases are underconstrained but work fine hardcode for better performance on large mesh
             
 
             
@@ -622,6 +635,9 @@ std::vector<float> IslandSolve(const std::vector<Vertex>& vertices, const std::v
         // printf("%d %d %d\n",a0,a1,a2);
 
         Vec2 uvA{0,0}, uvB{1,0}, uvC{0,1};
+        if(anchors == 2){
+            uvB = {1,1};
+        }
         std::vector<Vec2> uvout;
         solveLSCM(localVerts, localTris, a0, uvA, a1, uvB, a2, uvC, uvout);
 
@@ -731,15 +747,15 @@ bool writeOBJwithUV(const std::string &outName, std::vector<Vertex>& vertices, s
         out << "f ";
         // corner 0
         out << v1 << "/" << cornerIndex;
-        if (haveNormals) out << "/" << n1;
+        // if (haveNormals) out << "/" << n1;
         out << " ";
         // corner 1
         out << v2 << "/" << (cornerIndex+1);
-        if (haveNormals) out << "/" << n2;
+        // if (haveNormals) out << "/" << n2;
         out << " ";
         // corner 2
         out << v3 << "/" << (cornerIndex+2);
-        if (haveNormals) out << "/" << n3;
+        // if (haveNormals) out << "/" << n3;
         out << "\n";
 
         cornerIndex += 3;
