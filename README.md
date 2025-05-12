@@ -37,7 +37,7 @@ This builds the `UVMapper` executable in the root directory.
 
 This processes `resources/icosahedron.obj` and writes the output mesh with UVs to `out.obj`.
 
-## 🔍 Viewing UV Map in MeshLab
+## Viewing UV Map in MeshLab
 
 To view the UV map using MeshLab:
 
