@@ -37,6 +37,16 @@ This builds the `UVMapper` executable in the root directory.
 
 This processes `resources/icosahedron.obj` and writes the output mesh with UVs to `out.obj`.
 
+## 🔍 Viewing UV Map in MeshLab
+
+To view the UV map using MeshLab:
+
+1. Open `out.obj` in MeshLab.
+2. Go to `Filters` > `Texture` > `Set Texture`.
+3. In the dialog, select **"Use dummy texture"** or choose and apply your own texture file.
+4. Click **Apply** and close the dialog.
+5. You should now see the UV-mapped texture on the mesh.
+
 ## Notes
 
 * Only OBJ-format meshes are supported.
