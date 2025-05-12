@@ -217,7 +217,6 @@ std::vector<std::vector<int>> extractIslands(int numFaces, const std::vector<Dua
     
     float maxAngleRad = maxAngleDeg * (3.14159265f / 180.0f);
     float weightThresh = 1.0f + std::cos(maxAngleRad); // get weigth threshold
-    // weightThresh = 0; //turn off islands
     // printf("weight thresh: %f\n", weightThresh);
 
     std::vector<std::vector<int>> adj(numFaces); //add faces from valid edges
@@ -229,7 +228,7 @@ std::vector<std::vector<int>> extractIslands(int numFaces, const std::vector<Dua
         }
     }
 
-    // fill components (did not code this)
+    // fill components (algorithm is not mine)
     std::vector<bool> visited(numFaces, false);
     std::vector<std::vector<int>> islands;
     islands.reserve(numFaces);
@@ -252,7 +251,7 @@ std::vector<std::vector<int>> extractIslands(int numFaces, const std::vector<Dua
         islands.push_back(std::move(queue));
     }
 
-    if (islands.size() == 1) { //we need to split at least once
+    if (islands.size() == 1) { //we need to split at least once did not code this
         std::vector<std::vector<int>> mstAdj(numFaces);
         for (auto const& e : mstEdges) {
             mstAdj[e.f0].push_back(e.f1);
@@ -432,7 +431,7 @@ void solveLSCM(const std::vector<Vertex>& vertices, const std::vector<Triangle>&
         double area = std::abs((a1 * b2 - b1 * a2) / 2.0);
         if (area < 1e-8) continue; //degenerate triangles
 
-        // Local contributions to the 2x2 block per vertex pair
+        // get positive CR matrix
         int ids[3] = { i, j, k };
         double coeffs[3][2] = {
             { -(a1 + a2),  (b1 + b2) },
@@ -442,20 +441,20 @@ void solveLSCM(const std::vector<Vertex>& vertices, const std::vector<Triangle>&
 
         for (int r = 0; r < 3; r++) {
             int vr = ids[r];
-            for (int s = 0; s < 3; s++) {
+            for (int s = 0; s < 3; s++) { //put in matrix
                 int vs = ids[s];
                 A[2 * vr + 0][2 * vs + 0] += coeffs[r][0] * coeffs[s][0]; // uu
                 A[2 * vr + 0][2 * vs + 1] += coeffs[r][0] * coeffs[s][1]; // uv
             }
         }
-
+        //imaginary/rotated side
         double icoeffs[3][2] = {
-            {-(b1 + b2), -(a1 + a2)}, // i
-            {b1,a1}, // j
-            {b2,a2}  // k
+            {-(b1 + b2), -(a1 + a2)}, 
+            {b1,a1}, 
+            {b2,a2} 
         };
 
-        for (int r = 0; r < 3; ++r) {
+        for (int r = 0; r < 3; ++r) { //put in matrix
             int vr = ids[r];
             for (int s = 0; s < 3; ++s) {
                 int vs = ids[s];
@@ -484,19 +483,6 @@ void solveLSCM(const std::vector<Vertex>& vertices, const std::vector<Triangle>&
         b[r1] = fixedUV.y;
     }
 
-    // std::cout << "--- dumping A and b for this island (n=" << n << ") ---\n";
-    // for (int i = 0; i < 2*n; ++i) {
-    //     for (int j = 0; j < 2*n; ++j) {
-    //         std::cout << std::setw(8) << std::fixed << std::setprecision(3)
-    //                   << A[i][j] << " ";
-    //     }
-    //     std::cout << " | " 
-    //           << std::setw(8) << std::fixed << std::setprecision(3)
-    //           << b[i] 
-    //           << "\n";
-    // }
-    // std::cout << std::string(10*(2*n)+"---\n");
-
     Eigen::MatrixXd M(2 * n, 2 * n);
     Eigen::VectorXd B(2 * n);
     for(int i = 0; i < 2 * n; i++){
@@ -512,7 +498,7 @@ void solveLSCM(const std::vector<Vertex>& vertices, const std::vector<Triangle>&
         b[i] = X(i);
     }
 
-    // Extract UVs
+    // get the uvs
     uvs.resize(n);
     for (int i = 0; i < n; i++) {
         uvs[i].x = b[2 * i];
@@ -523,7 +509,7 @@ void solveLSCM(const std::vector<Vertex>& vertices, const std::vector<Triangle>&
         // printf("pre-norm uv[%d] = (%f,%f)\n", i, uvs[i].x, uvs[i].y);
 }
 
-std::vector<float> IslandSolve(const std::vector<Vertex>& vertices, const std::vector<Triangle>& triangles, const std::vector<std::vector<int>>& islands) { //wrote code, but very similar to online examples
+std::vector<float> islandSolve(const std::vector<Vertex>& vertices, const std::vector<Triangle>& triangles, const std::vector<std::vector<int>>& islands) { //wrote code, but very similar to online examples
     std::vector<float> uvData;
     uvData.reserve(triangles.size() * 3 * 2);
     // int ran =0;
@@ -542,7 +528,7 @@ std::vector<float> IslandSolve(const std::vector<Vertex>& vertices, const std::v
             for (int face : island) {
                 auto const& tri = triangles[face];
                 for (auto vi : { tri.v1, tri.v2, tri.v3 }) {
-                    if (std::find(verts.begin(), verts.end(), vi) == verts.end()) //add each vert once
+                    if (std::find(verts.begin(), verts.end(), vi) == verts.end()) //add each vert once coukd have used set
                         verts.push_back(vi);
                 }
             }
@@ -576,7 +562,7 @@ std::vector<float> IslandSolve(const std::vector<Vertex>& vertices, const std::v
         localVerts.reserve(island.size() * 3);
         localTris.reserve(island.size());
 
-        // get all unique verts
+        // get all verts
         for (int face : island) {
             auto const& T = triangles[face];
             for (auto origV : { T.v1, T.v2, T.v3 }) {
@@ -594,7 +580,7 @@ std::vector<float> IslandSolve(const std::vector<Vertex>& vertices, const std::v
             lt.v1 = vertMap[T.v1];
             lt.v2 = vertMap[T.v2];
             lt.v3 = vertMap[T.v3];
-            localTris.push_back(lt);
+            localTris.push_back(lt); //add tri from island
         }
 
         // now that the triangle and vertex arrays are made get the anchors
@@ -604,7 +590,7 @@ std::vector<float> IslandSolve(const std::vector<Vertex>& vertices, const std::v
         //get far pair
         float bestd = -1;
         for (int i = 0; i < boundaryVerts.size(); i++) {
-            for (int j = i+1; j < boundaryVerts.size(); j++) {
+            for (int j = i + 1; j < boundaryVerts.size(); j++) {
             auto vi = localVerts[boundaryVerts[i]];
             auto vj = localVerts[boundaryVerts[j]];
             float d2 = glm::distance2(glm::vec3(vi.x, vi.y, vi.z), glm::vec3(vj.x, vj.y, vj.z));
@@ -615,14 +601,14 @@ std::vector<float> IslandSolve(const std::vector<Vertex>& vertices, const std::v
             }
         }
 }
-        // to avoid degen triangles ill get a third point to kill shear and rotational issues
+        // to avoid degen triangles ill get a third point to kill shear and rotational issues NOT USED
         int a2 = a0;  
         float bestArea = 0;
         glm::vec3 p0 = glm::vec3(localVerts[a0].x, localVerts[a0].y, localVerts[a0].z);
         glm::vec3 p1 = glm::vec3(localVerts[a1].x, localVerts[a1].y, localVerts[a1].z);
         glm::vec3 u  = p1 - p0;
 
-        for (int i = 0; i < (int)boundaryVerts.size(); i++) {
+        for (int i = 0; i < (int)boundaryVerts.size(); i++) { //NOT USED
             int bi = boundaryVerts[i];
             if (i == a0 || i == a1) continue;
             glm::vec3 w = glm::vec3(localVerts[bi].x, localVerts[bi].y, localVerts[bi].z) - p0;
@@ -634,8 +620,8 @@ std::vector<float> IslandSolve(const std::vector<Vertex>& vertices, const std::v
         }
         // printf("%d %d %d\n",a0,a1,a2);
 
-        Vec2 uvA{0,0}, uvB{1,0}, uvC{0,1};
-        if(anchors == 2){
+        Vec2 uvA{0,0}, uvB{1,0}, uvC{0,1}; //ONLY USES a and b, use define to change it (don't its really broken)
+        if(anchors == 2){ //fix anchor
             uvB = {1,1};
         }
         std::vector<Vec2> uvout;
@@ -686,7 +672,7 @@ bool loadOBJ(const std::string& filename, std::vector<Vertex>& vertices, std::ve
             std::string v1, v2, v3;
             ss >> v1 >> v2 >> v3;
 
-            auto parseFace = [](const std::string& s, unsigned int& vertexIndex, unsigned int& normalIndex) {
+            auto parseFace = [](const std::string& s, unsigned int& vertexIndex, unsigned int& normalIndex) { //did not make this
 
                 size_t firstSlash = s.find('/');
                 size_t secondSlash = s.find('/', firstSlash + 1);
@@ -734,20 +720,16 @@ bool writeOBJwithUV(const std::string &outName, std::vector<Vertex>& vertices, s
 
     int cornerIndex = 1;  
     for (auto const& T : triangles) {
-        // vertex indices
-        unsigned v1 = T.v1 + 1,
-                 v2 = T.v2 + 1,
-                 v3 = T.v3 + 1;
+        // vertices
+        unsigned v1 = T.v1 + 1;
+        unsigned v2 = T.v2 + 1;
+        unsigned v3 = T.v3 + 1;
 
-
-        unsigned n1 = haveNormals && T.n1 != UINT_MAX ? T.n1 + 1 : 0;
-        unsigned n2 = haveNormals && T.n2 != UINT_MAX ? T.n2 + 1 : 0;
-        unsigned n3 = haveNormals && T.n3 != UINT_MAX ? T.n3 + 1 : 0;
 
         out << "f ";
         // corner 0
         out << v1 << "/" << cornerIndex;
-        // if (haveNormals) out << "/" << n1;
+        // if (haveNormals) out << "/" << n1; removed vertnormal index
         out << " ";
         // corner 1
         out << v2 << "/" << (cornerIndex+1);
@@ -774,7 +756,7 @@ int main(int argc, char** argv) {
 
     std::string objFilename = argv[1];
 
-    // Initialize GLFW
+    // Initialize GLFW (none of the GLFW or OPENGL code is done by me)
     if (!glfwInit()) return -1;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -824,7 +806,7 @@ int main(int argc, char** argv) {
     //     std::cout << "\n";
     // }
     
-    auto uvData = IslandSolve(vertices, triangles, islands);
+    auto uvData = islandSolve(vertices, triangles, islands);
     
     // for(int i = 0; i < uvData.size(); i += 2){
     //     printf("u:%f v:%f\n", uvData[i], uvData[i + 1]);
