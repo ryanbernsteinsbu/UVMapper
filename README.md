@@ -1,4 +1,4 @@
-# UVMapper — Least Squares Conformal Mapping (LSCM)
+# UVMapper - Least Squares Conformal Mapping (LSCM)
 
 This project implements UV unwrapping using Least Squares Conformal Mapping (LSCM) to generate conformal (angle-preserving) UV maps for 3D meshes.
 
