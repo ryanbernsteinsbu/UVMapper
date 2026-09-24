@@ -1,0 +1,7 @@
+[
+  {
+    "directory": "/home/hiego/Documents/UVMapper",
+    "command": "g++ main.cpp glad/glad.c -Iinclude -lglfw -ldl -lGL -g -o UVMapper",
+    "file": "main.cpp"
+  }
+]

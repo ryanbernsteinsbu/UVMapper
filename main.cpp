@@ -1,3 +1,4 @@
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -19,7 +20,6 @@
 #include <eigen3/Eigen/Dense>
 #include <set>
 #include <iomanip>
-
 #define maxDihedralAngle 116.566 //anything as sharp or less sharp than a dodecahedron is cut
 #define anchors 2
 
@@ -112,7 +112,6 @@ struct DualEdge {
     int f0, f1;
     float weight;
 };
-
 void buildEdgeToFacesMap(const std::vector<Triangle>& triangles, std::map<EdgeKey, std::vector<int>>& edgeToFaces){
     edgeToFaces.clear();
     for (int t = 0; t < (int)triangles.size(); t++) {
